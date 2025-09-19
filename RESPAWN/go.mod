@@ -1,3 +1,3 @@
-module respawn_path/RESPAWN
+module RESPAWN
 
 go 1.20
