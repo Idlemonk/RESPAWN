@@ -1,0 +1,25 @@
+package main 
+import (
+	"fmt"
+	"os"
+	"RESPAWN/internal/system"
+	"RESPAWN/pkg/config"
+
+)
+
+func main() {
+	// Initialize the logger
+	if err := system.InitLogger(); err != nil {
+		fmt.Printf("Failed to iitialize logger: %v\n", err)
+		os.Exit(1) 
+	}
+	defer system.Close()
+
+	// Test the logging system
+	system.Debug("This is a debug message - testing logging system")
+    system.Info("Logger initialized successfully")
+    system.Warn("This is a warning message test")
+    system.Error("This is an error message test (not a real error)")
+    fmt.Println("Logging test completed. Check ~/.respawn/logs/respawn.log")
+}
+
