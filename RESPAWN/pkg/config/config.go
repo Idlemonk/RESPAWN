@@ -22,7 +22,7 @@ type Config struct {
 
 	// checkpoint settings
 	CheckpointInterval time.Duration	`json:"checkpoint_interval"`
-	DataRetentionDays time.Duration 		`json:"data_rentention_days" yaml:"dataRententionDays"`
+	DataRetentionDays  int 		`json:"data_rentention_days"`
 
 	// System settings
 	AutoRestore bool `json:"auto_restore"`
