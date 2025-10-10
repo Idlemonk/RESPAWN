@@ -2,4 +2,7 @@ module RESPAWN
 
 go 1.20
 
-require golang.org/x/mod v0.28.0 // indirect
+require (
+	github.com/klauspost/compress v1.18.0
+	golang.org/x/text v0.29.0
+)
