@@ -10,6 +10,7 @@ import (
     "path/filepath"
     "strings"
     "time"
+    "Compress/gzip"
     "github.com/klauspost/compress/zstd"
 	"RESPAWN/internal/checkpoint"
 	"RESPAWN/internal/system"
