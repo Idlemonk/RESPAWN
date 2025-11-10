@@ -2,7 +2,6 @@ package checkpoint
 
 import (
     "crypto/sha256"
-    "encoding/binary"
     "encoding/json"
     "fmt"
     "io"
@@ -10,11 +9,11 @@ import (
     "path/filepath"
     "strings"
     "time"
-    "Compress/gzip"
-    "github.com/klauspost/compress/zstd"
-	"RESPAWN/internal/checkpoint"
-	"RESPAWN/internal/system"
 
+    "github.com/klauspost/compress/zstd"
+
+	"RESPAWN/internal/system"
+    "RESPAWN/internal/types" 
 )
 
 type Storage struct {
@@ -72,6 +71,12 @@ func (s *Storage) SetCompressionLevel(level int) error {
         return fmt.Errorf("Invalid compression level %d, must be 1-22", level)
     }
 
+compressor, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)))
+if err != nil {
+    return fmt.Errorf("failed to create compressor with level %d: %w", level, err)
+}
+
+
     s.compressor.Close()
     s.compressor = compressor 
     s.compressionLevel = level
@@ -81,7 +86,7 @@ func (s *Storage) SetCompressionLevel(level int) error {
 }
 
 // This below is the function that saves a checkpoint to binary format.
-func (s *Storage) SaveCheckpoint(checkpoint *Checkpoint) (string, int64, error) {
+func (s *Storage) SaveCheckpoint(checkpoint *types.Checkpoint) (string, int64, error) {
     system.Debug("Saving checkpoint", checkpoint.ID)
 
     // This is how the binary file is created 
@@ -129,7 +134,7 @@ func (s *Storage) SaveCheckpoint(checkpoint *Checkpoint) (string, int64, error) 
 }
 
 // LoadCheckpoint loads a checkpoint from storage with streaming
-func (s *Storage) LoadCheckpoint(checkpointID string) (*Checkpoint, error) {
+func (s *Storage) LoadCheckpoint(checkpointID string) (*types.Checkpoint, error) {
     system.Debug("Loading checkpoint", checkpointID)
 
 // Try compressed version first, then uncompressed
@@ -186,7 +191,7 @@ func (s *Storage) LoadCheckpoint(checkpointID string) (*Checkpoint, error) {
 }
 
 // LoadAllCheckpoints loads all available checkpoints with metadata
-func (s *Storage) LoadAllCheckpoints() ([]Checkpoint, error) {
+func (s *Storage) LoadAllCheckpoints() ([]types.Checkpoint, error) {
     system.Debug("Loading all available checkpoints")
 
     files, err := os.ReadDir(s.baseDir)
@@ -194,7 +199,7 @@ func (s *Storage) LoadAllCheckpoints() ([]Checkpoint, error) {
         return nil, fmt.Errorf("Failed to read checkpoint directory: %w", err)
     }
 
-    var checkpoints []Checkpoint
+    var checkpoints []types.Checkpoint
 
     for _, file := range files {
         if file.IsDir() || (!strings.HasSuffix(file.Name(), ".bin")) {
@@ -222,7 +227,7 @@ func (s *Storage) LoadAllCheckpoints() ([]Checkpoint, error) {
         }
 
         // Create checkpoint summary from metadata
-        checkpoint := Checkpoint{
+        checkpoint := types.Checkpoint{
             ID:           metadata.ID,
             Timestamp:    metadata.Timestamp,
             AppNames:     metadata.AppNames,
@@ -243,7 +248,7 @@ func (s *Storage) LoadAllCheckpoints() ([]Checkpoint, error) {
 }
 
 // CompressCheckpoint compress an existing checkpoint
-func (s *Storage) CompressCheckpoint(checkpoint *Checkpoint) error {
+func (s *Storage) CompressCheckpoint(checkpoint *types.Checkpoint) error {
     if checkpoint.IsCompressed {
         return nil // Already Compressed
     }
@@ -378,7 +383,7 @@ func (s *Storage) CleanOldCheckpoints(cutoffTime time.Time) error {
 // Helper functions
 
 // serializeCheckpoints converts checkpoint to binary format
-func (s *Storage) serializeCheckpoint(checkpoint *Checkpoint) ([]byte, error) {
+func (s *Storage) serializeCheckpoint(checkpoint *types.Checkpoint) ([]byte, error) {
     //  For now, use JSON serialization as binary format
     // In a more optimized version, You could use protocol buffers or custom binary format
     data, err := json.Marshal(checkpoint)
@@ -389,13 +394,13 @@ func (s *Storage) serializeCheckpoint(checkpoint *Checkpoint) ([]byte, error) {
 }
 
 // deserializeCheckpoint converts binary data back to checkpoint
-func (s *Storage) deserializeCheckpoint(reader io.Reader) (*Checkpoint, error) {
+func (s *Storage) deserializeCheckpoint(reader io.Reader) (*types.Checkpoint, error) {
     data, err := io.ReadAll(reader)
     if err != nil {
         return nil, err 
     }
 
-    var checkpoint Checkpoint
+    var checkpoint types.Checkpoint
     if err := json.Unmarshal(data, &checkpoint); err != nil {
         return nil, err
     }

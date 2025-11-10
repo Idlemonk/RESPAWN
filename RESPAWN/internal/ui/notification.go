@@ -3,9 +3,10 @@ package ui
 import (
 	"fmt"
 	"os/exec"
-	"respawn/internal/system"
 	"strings"
 	"time"
+	"RESPAWN/internal/types"
+	"RESPAWN/internal/system"
 )
 
 // NotificationManager handles user notifications
@@ -34,27 +35,6 @@ const (
 	NotificationWarning
 	NotificationError
 )
-
-// RestoreSummary contains restoration completion details
-type RestoreSummary struct {
-	TotalApps      int
-	SuccessfulApps int
-	FailedApps     int
-	SkippedApps    int
-	TotalDuration  time.Duration
-	FailedAppNames []string
-	StartTime      time.Time
-	EndTime        time.Time
-}
-
-// CheckpointStatus contains checkpoint operation status
-type CheckpointStatus struct {
-	Success      bool
-	CheckpointID string
-	Timestamp    time.Time
-	ErrorMessage string
-	AppsCount    int
-}
 
 // NewNotificationManager creates a new notification manager
 func NewNotificationManager() *NotificationManager {
@@ -100,7 +80,7 @@ func (nm *NotificationManager) ShowAppRestored(appName string, timestamp time.Ti
 }
 
 // ShowRestoreComplete shows restoration completion summary
-func (nm *NotificationManager) ShowRestoreComplete(summary RestoreSummary) error {
+func (nm *NotificationManager) ShowRestoreComplete(summary types.RestoreSummary) error {
 	system.Info("Restoration complete - showing summary")
 
 	// Build summary message
@@ -138,7 +118,7 @@ func (nm *NotificationManager) ShowRestoreComplete(summary RestoreSummary) error
 }
 
 // ShowCheckpointFailed shows checkpoint failure alert
-func (nm *NotificationManager) ShowCheckpointFailed(status CheckpointStatus) error {
+func (nm *NotificationManager) ShowCheckpointFailed(status types.CheckpointStatus) error {
 	system.Error("Checkpoint failed:", status.ErrorMessage)
 
 	// Always show checkpoint failures (Modified Option C requirement)
@@ -159,7 +139,7 @@ func (nm *NotificationManager) ShowCheckpointFailed(status CheckpointStatus) err
 }
 
 // ShowCheckpointSuccess shows checkpoint creation confirmation (silent per Modified Option C)
-func (nm *NotificationManager) ShowCheckpointSuccess(status CheckpointStatus) error {
+func (nm *NotificationManager) ShowCheckpointSuccess(status types.CheckpointStatus) error {
 	system.Debug("Checkpoint created successfully:", status.CheckpointID)
 
 	// Silent per Modified Option C
@@ -335,7 +315,7 @@ func (nm *NotificationManager) ShowRestorationProgress(current, total int, curre
 }
 
 // ShowStatusSummary shows current RESPAWN status (for manual status checks)
-func (nm *NotificationManager) ShowStatusSummary(summary StatusSummary) error {
+func (nm *NotificationManager) ShowStatusSummary(summary types.StatusSummary) error {
 	system.Info("Showing status summary")
 
 	message := fmt.Sprintf(
@@ -355,14 +335,6 @@ func (nm *NotificationManager) ShowStatusSummary(summary StatusSummary) error {
 	}
 
 	return nil
-}
-
-// StatusSummary contains RESPAWN status information
-type StatusSummary struct {
-	LastCheckpoint   time.Time
-	TotalCheckpoints int
-	AutoStartEnabled bool
-	HealthStatus     string
 }
 
 // boolToStatus converts boolean to status string
@@ -397,7 +369,7 @@ func (nm *NotificationManager) ShowCriticalAlert(title, message string) error {
 }
 
 // ShowPermissionRequest shows permission request dialog
-func (nm *NotificationManager) ShowPermissionRequest(permissionType, instructions string) error {
+func (nm *NotificationManager) ShowPermissionRequest(permissionType, instructions string) (string, error) {
 	system.Info("Requesting permission:", permissionType)
 
 	message := fmt.Sprintf(
@@ -414,17 +386,16 @@ func (nm *NotificationManager) ShowPermissionRequest(permissionType, instruction
 	output, err := cmd.Output()
 
 	if err != nil {
-		system.Warn("User declined permission or dialog failed")
-		return fmt.Errorf("permission request declined")
+		system.Warn("User declined permission or dialog failed") 
+		return "", fmt.Errorf("Permission request declined: %w" ,err )
 	}
 
 	// Check which button was clicked
 	if strings.Contains(string(output), "Grant Permission") {
-		system.Info("User chose to grant permission")
-		return nil
+		return "Grant Permission",nil
 	}
 
-	return fmt.Errorf("user chose to quit")
+	return "Quit", fmt.Errorf("user chose to quit")
 }
 
 // ShowRestoreOptionsMenu shows interactive restore options (for checkpoint selection)

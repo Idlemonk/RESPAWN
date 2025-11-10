@@ -9,8 +9,7 @@ import (
     "strconv"
     "strings"
     "time"
-    "RESPAWN/internal/checkpoint"
-    "RESPAWN/internal/process"
+
     "RESPAWN/pkg/config"
 )
 
@@ -38,16 +37,17 @@ const (
 )
 
 type WorkPattern struct {
-    StartHour           int                    `json:"start_hour"`
-    EndHour             int                    `json:"end_hour"`
-    ActiveAppThreshold  int                    `json:"active_app_threshold"`
-    IdleTimeBeforeSleep time.Duration         `json:"idle_time_before_sleep"`
-    CPUPatterns         map[int]float64       `json:"cpu_patterns"`           // Hour -> Average CPU
-    AppUsageFrequency   map[string]int        `json:"app_usage_frequency"`    // App -> Usage count
-    TopThreeApps        []string              `json:"top_three_apps"`
-    LearningStartDate   time.Time             `json:"learning_start_date"`
-    IsLearningComplete  bool                  `json:"is_learning_complete"`
+	StartHour           int             `json:"start_hour"`
+	EndHour             int             `json:"end_hour"`
+	ActiveAppThreshold  int             `json:"active_app_threshold"`
+	IdleTimeBeforeSleep time.Duration   `json:"idle_time_before_sleep"`
+	CPUPatterns         map[int]float64 `json:"cpu_patterns"`                               // Hour -> Average CPU
+	AppUsageFrequency   map[string]int  `json:"app_usage_frequency"`                    // App Name -> Usage Count
+	TopThreeApps        []string        `json:"top_three_apps"`
+	LearningStartDate   time.Time       `json:"learning_start_date"`
+	IsLearningComplete  bool            `json:"is_learning_complete"`
 }
+
 
 type OptimizationMetrics struct {
     CheckpointDurations []time.Duration `json:"checkpoint_durations"`
@@ -57,8 +57,6 @@ type OptimizationMetrics struct {
 }
 
 type SystemMonitor struct {
-    checkpointManager *checkpoint.CheckpointManager
-    detector          *process.ProcessDetector
     workPattern       *WorkPattern
     metrics           *OptimizationMetrics
     isRunning         bool
@@ -77,19 +75,11 @@ func NewSystemMonitor() (*SystemMonitor, error) {
 
     baseDir := filepath.Join(homeDir, ".respawn")
 
-    // Initialize checkpoint manager
-    checkpointManager, err := checkpoint.NewCheckpointManager()
-    if err != nil {
-        return nil, fmt.Errorf("Failed to create checkpoint manager: %w", err)
-    }
-
     monitor := &SystemMonitor{
-        checkpointManager: checkpointManager,
-        detector:          process.NewProcessDetector(),
-        processID:         os.Getpid(),
-        baseDir:           baseDir,
-        lastHeartbeat:     time.Now(),
-    }
+		processID:     os.Getpid(),
+		baseDir:       baseDir,
+		lastHeartbeat: time.Now(),
+	}
 
     // Load or create work pattern
     if err := monitor.loadWorkPattern(); err != nil {
@@ -149,7 +139,7 @@ func (sm *SystemMonitor) DetectSystemState() SystemState {
     Debug ("Detecting system state")
 
     // Check if first run
-    if sm.isFirstRun(){
+    if sm.isFirstRun() {
         return StateFirstRun
     }
 
@@ -162,10 +152,15 @@ func (sm *SystemMonitor) DetectSystemState() SystemState {
 
     // Get last heartbeat time
     lastHeartbeat := sm.getLastHeartbeatTime()
-    if lastHearbear.IsZero() {
+    if lastHeartbeat.IsZero() {
         Debug("No previous heartbeat found")
         return StateRestart
     }
+
+    //Calculate time since last heartbeat
+    timeSinceHeartbeat := time.Since(lastHeartbeat)
+
+    Debug("System uptime:", uptime, "Time since last heartbeat:", timeSinceHeartbeat)
 
     // Hybrid detection logic
     if uptime < timeSinceHeartbeat {
@@ -240,12 +235,13 @@ func (sm *SystemMonitor) performMonitoringCycle() {
     // Update learning patterns
     sm.updateLearningData()
 
-    // Check is checkpoint is needed 
+    // Check if checkpoint is needed 
     if sm.shouldCreateCheckpoint() {
         Debug("Checkpoint needed! - creating now")
-        if err := sm.createScheduledCheckpoint(); err != nil {
-            Error("Failed to create scheduled checkpoint:", err)
-        }
+        // Note: This would call checkpoint manager from main.go
+        // For now, Just Log
+        Info("Checkpoint creation triggered")
+
     }
 
     // CHECK FOR OPTIMIZATIONS
@@ -256,7 +252,10 @@ func (sm *SystemMonitor) performMonitoringCycle() {
     // Perform maintenance
     if sm.shouldRunMaintenance() {
         Debug("Running maintenance tasks")
-        sm.checkpointManager.PerformMaintenanceTasks()
+
+        // Note: This would call checkpoint manager from main.go
+        Info("Maintenance tasks triggered")
+        
     }
 }
 
@@ -264,8 +263,6 @@ func (sm *SystemMonitor) performMonitoringCycle() {
 func (sm *SystemMonitor) shouldCreateCheckpoint() bool {
     // This function checks if enough time has passed
     timeSinceLastCheckpoint := time.Since(sm.lastCheckpoint)
-    baseInterval := config.GlobalConfig.CheckpointInterval
-
     // This method gets optimal interval based on learned patterns
     optimalInterval := sm.getOptimalCheckpointInterval()
 
@@ -300,8 +297,8 @@ func (sm *SystemMonitor) getOptimalCheckpointInterval() time.Duration {
 
     // During work hours (learned pattern), use longer intervals
     if sm.isWorkHours(currentHour) {
-        UserActivity := sm.getCurrentUserActivity()
-        switch UserActivity {
+        userActivity := sm.getCurrentUserActivity()
+        switch userActivity {
         case ActivityIntensive:
             return baseInterval * 2 // 2 hours during intensive work
         case ActivityWorking:
@@ -345,11 +342,9 @@ func (sm *SystemMonitor) updateLearningData() {
 
     currentHour := time.Now().Hour()
 
-    // Update app usage pattern frequency
-    if processes, err := sm.detector.DetectRunningProcesses(); err == nil {
-        for _, proc := range processes {
-            sm.workPattern.AppUsageFrequency[proc.Name]++
-        } 
+    
+    if cpuUsage, err := sm.getCPUUsage(); err == nil {
+        sm.workPattern.CPUPatterns[currentHour] = cpuUsage
     }
 
     // Check if learning period is complete (1 month)
@@ -398,33 +393,7 @@ func (sm *SystemMonitor) completeLearning() {
     sm.workPattern.IsLearningComplete = true
     sm.saveWorkPattern()
 
-    Info("Learning completed. Top 3 critical applications:", strings.Join(sm.workPattern.TopThreeApps, ", "))
-}
-
-// createScheduledCheckpoint creates a checkpoint and records timing
-func (sm *SystemMonitor) createScheduledCheckpoint() error {
-    startTime := time.Now()
-
-    checkpoint, err := sm.checkpointManager.CreateCheckpoint()
-    if err != nil {
-        return err 
-    }
-
-    duration := time.Since(startTime)
-    sm.lastCheckpoint = time.Now()
-
-    // Record metrics
-    sm.metrics.CheckpointDurations = append(sm.metrics.CheckpointDurations, duration)
-
-    // Keep only last 20 duration for analysis
-    if len(sm.metrics.CheckpointDurations) > 20 {
-        sm.metrics.CheckpointDurations = sm.metrics.CheckpointDurations[1:]
-    }
-
-    sm.saveMetrics()
-
-    Info("Scheduled checkpoint created:", checkpoint.ID, "Duration:", duration)
-    return nil 
+    Info("Top 3 apps:", strings.Join(sm.workPattern.TopThreeApps, ", "))
 }
 
 // checkAndApplyOptimizations method checks for and applies performance optimizations
@@ -449,11 +418,14 @@ func (sm *SystemMonitor) checkAndApplyOptimizations() {
 
 // getSystemUptime returns system uptime duration
 func (sm *SystemMonitor) getSystemUptime() (time.Duration, error) {
-    cmd := exec.Command("uptime")
+    cmd := exec.Command("sysctl", "-n", "kern.boottime")
     output, err := cmd.Output()
     if err != nil {
-        return 0, err
+        return 2 * time.Hour, err
     }
+
+    outputStr := string(output)
+    Debug("Boot time output:", outputStr)
 
     // Parse uptime output(simplified - real implementation would be more robust)
     return 2 * time.Hour, nil 
@@ -461,41 +433,45 @@ func (sm *SystemMonitor) getSystemUptime() (time.Duration, error) {
 
 // getCPUUsage returns current CPU usage percentage
 func (sm *SystemMonitor) getCPUUsage() (float64, error) {
-    cmd := exec.Command("pmset", "-g", "batt")
+    // TODO: Real implementation needed
+    cmd := exec.Command("top", "-l", "1", "-n", "0")
     output, err := cmd.Output()
     if err != nil {
-        return 0, err
+        return 25.5, err
     }
 
     lines := strings.Split(string(output), "\n")
     for _, line := range lines {
         if strings.Contains(line, "CPU usage:") {
             // Parse CPU usage from top output
+            Debug("CPU line:", line)
             // Simplified parsing - real implementation would be more robust
             return 25.5, nil // Placeholder
         }
     }
 
-    return 0, fmt.Errorf("CPU usage not found in top output")
+    return 25.5, nil
 }
 
 // getBatteryLevel returns current battery percentage
 func (sm *SystemMonitor) getBatteryLevel() (int, error) {
+    // TODO: Real implementation needed    
     cmd := exec.Command("pmset", "-g", "batt")
     output, err := cmd.Output()
     if err != nil {
-        return 0, err
+        return 75, err
     }
 
     lines := strings.Split(string(output), "\n")
     for _, line := range lines {
         if strings.Contains(line, "%") {
+            Debug("Battery line:", line)
             // Extract percentage (simplified)
             return 75, nil // placeholder
         }
     }
 
-    return 0, fmt.Errorf("battery level not found")
+    return 75, nil
 }
 
 // isPowerConnected checks if power adapter is connected
@@ -507,6 +483,151 @@ func (sm *SystemMonitor) isPowerConnected() bool {
     }
 
     return strings.Contains(string(output), "AC Power")
+}
+
+// Background loops
+func (sm *SystemMonitor) heartbeatLoop() {
+    ticker := time.NewTicker(1 * time.Minute)
+    defer ticker.Stop()
+
+    for sm.isRunning {
+        <-ticker.C
+        sm.updateHeartbeat()
+    }   
+}
+
+func (sm *SystemMonitor) learningLoop() {
+    ticker := time.NewTicker(1 * time.Hour)
+    defer ticker.Stop()
+
+    for sm.isRunning {
+        <-ticker.C
+        sm.updateLearningData()
+    }
+}
+
+func (sm *SystemMonitor) updateHeartbeat() {
+    sm.lastHeartbeat = time.Now()
+    heartbeatFile := filepath.Join(sm.baseDir, "heartbeat")
+    os.WriteFile(heartbeatFile, []byte(sm.lastHeartbeat.Format(time.RFC3339)), 0644)
+}
+
+func (sm *SystemMonitor) getLastHeartbeatTime() time.Time {
+    heartbeatFile := filepath.Join(sm.baseDir, "heartbeat")
+    data, err := os.ReadFile(heartbeatFile)
+    if err != nil {
+        return time.Time{}    
+    }
+
+    t, err := time.Parse(time.RFC3339, string(data))
+    if err != nil {
+        return time.Time{}
+    }
+
+    return t
+}
+
+func (sm *SystemMonitor) isFirstRun() bool {
+    heartbeatFile := filepath.Join(sm.baseDir, "heartbeat")
+    _, err := os.Stat(heartbeatFile)
+    return os.IsNotExist(err)
+}
+
+func (sm *SystemMonitor) wasProcessRunning() bool {
+    pidFile := filepath.Join(sm.baseDir, "monitor.pid")
+    data, err := os.ReadFile(pidFile)
+    if err != nil {
+        return false
+    }
+
+    oldPID, _ := strconv.Atoi(strings.TrimSpace(string(data)))
+    process, err := os.FindProcess(oldPID)
+    if err != nil {
+        return false
+    }
+
+    err = process.Signal(os.Signal(nil))    
+    return err == nil
+}
+
+func (sm *SystemMonitor) isWorkHours(hour int) bool {
+    if sm.workPattern.StartHour <= sm.workPattern.EndHour {
+        return hour >= sm.workPattern.StartHour && hour <= sm.workPattern.EndHour
+    }
+    return hour >= sm.workPattern.StartHour || hour <= sm.workPattern.EndHour
+}
+
+func (sm *SystemMonitor) getCurrentUserActivity() UserActivity {
+    return ActivityWorking
+}
+
+func (sm *SystemMonitor) isUserInIntensiveWork() bool {
+    return sm.getCurrentUserActivity() == ActivityIntensive
+}
+
+func (sm *SystemMonitor) shouldRunOptimizations() bool {
+    return time.Since(sm.metrics.LastOptimization) > 24*time.Hour
+}
+
+func (sm *SystemMonitor) shouldRunMaintenance() bool {
+    return time.Since(sm.lastCheckpoint) > 6*time.Hour
+}
+// State handlers
+
+func (sm *SystemMonitor) createInitialCheckpoint() error {
+    // Placeholder for initial checkpoint creation logic}
+    Info("Creating initial checkpoint...")
+    return nil
+}
+
+func (sm *SystemMonitor) handleSystemRestart() error {
+    // Placeholder for system restart handling logic
+    Info("Handling system restart...")
+    return nil
+}
+
+func (sm *SystemMonitor) updateAfterSleep() error {
+    // Placeholder for updating after sleep logic
+    Info("Updating after sleep...")
+    sm.updateHeartbeat()
+    return nil 
+}
+
+func (sm *SystemMonitor) handleCrashRecovery() error {
+    Warn("Resuming normal operation")
+    return nil
+}
+
+func (sm *SystemMonitor) resumeNormalOperation() error {
+    Info("Resuming normal operation...")
+    sm.updateHeartbeat()
+    return nil
+}
+
+func (sm *SystemMonitor) stateToString(state SystemState) string {
+	states := map[SystemState]string{
+		StateUnknown:      "Unknown",
+		StateFirstRun:     "First Run",
+		StateNormal:       "Normal",
+		StateSleep:        "Sleep",
+		StateRestart:      "Restart",
+		StateCrash:        "Crash",
+		StateHighCPU:      "High CPU",
+		StateLowBattery:   "Low Battery",
+		StateAboutToSleep: "About to Sleep",
+	}
+	return states[state]
+}
+
+type Optimization struct {
+    Description         string
+    ImprovementPercent  float64
+    Apply           func() error                                   
+}
+
+func (sm *SystemMonitor) generateOptimizations() []Optimization {
+    // Implementation for optimization generation
+    return []Optimization{}
 }
 
 // Persistence functions
@@ -533,8 +654,25 @@ func (sm *SystemMonitor) loadWorkPattern() error {
     return json.Unmarshal(data, sm.workPattern)
 }
 
-// Additional helper functions would continue here...
-//(heartbeat management, crash detection, optimization generation, etc.)
+func (sm *SystemMonitor) saveMetrics() error {
+	filePath := filepath.Join(sm.baseDir, "metrics.json")
+	data, err := json.MarshalIndent(sm.metrics, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, data, 0644)
+}
+
+func (sm *SystemMonitor) loadMetrics() error {
+	filePath := filepath.Join(sm.baseDir, "metrics.json")
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	sm.metrics = &OptimizationMetrics{}
+	return json.Unmarshal(data, sm.metrics)
+}
 
 // Stop stops the monitoring process
 func (sm *SystemMonitor) Stop() {
@@ -542,15 +680,4 @@ func (sm *SystemMonitor) Stop() {
     sm.isRunning = false
 }
 
-type Optimization struct {
-    Description         string
-    ImprovementPercent  float64
-    Apply           func() error                                   
-}
 
-func (sm *SystemMonitor) generateOptimizations() []Optimization {
-    // Implementation for optimization generation
-    return []Optimization{}
-}
-
-// Additional methods would be implemented here following the same patterns...

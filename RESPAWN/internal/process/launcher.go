@@ -4,43 +4,37 @@ import (
 	"fmt"
 	"os/exec"
 	"time"
+
 	"RESPAWN/internal/system"
+	"RESPAWN/internal/types"
 	"RESPAWN/pkg/config"	
 
 )
 
-type LaunchResult struct {
-	AppName     string  `json:"app_name"`
-    Success     bool   `json:"success"`
-    PID         int    `json:"pid"`
-    LaunchTime  time.Time `json:"launch_time"`
-    RetryCount  int    `json:"retry_count"`
-    ErrorMsg    string `json:"error_msg,omitempty"`
-}
 
 
 type ApplicationLauncher struct {
 	detector *ProcessDetector
-	results  []LaunchResult
+	results  []types.LaunchResult
 }
 
 // NewApplicationLauncher creates a new application launcher
 func NewApplicationLauncher()  *ApplicationLauncher {
 	return &ApplicationLauncher{
 		detector: NewProcessDetector(),
-		results: make([]LaunchResult, 0),
+		results: make([]types.LaunchResult, 0),
 	}
 }
 
 // RestoreApplications launches applications in memory order with full state restoration
-func (al *ApplicationLauncher) RestoreApplications(processes []ProcessInfo) ([]LaunchResult, error) {
+func (al *ApplicationLauncher) RestoreApplications(processes []types.ProcessInfo) ([]types.LaunchResult, error) {
 	system.Info("Starting application restoration")
 
 	// Sort by memory usage (highest first)
 	sortedProcesses := SortByMemoryUsage(processes)
 
 	for _, proc := range sortedProcesses {
-		// Check is app is already running
+		// Check if app is already running
 		if al.isApplicationRunning(proc.ProcessName) {
 			system.Debug("Skipping", proc.Name, "- already running")
 			continue
@@ -67,7 +61,7 @@ func (al *ApplicationLauncher) RestoreApplications(processes []ProcessInfo) ([]L
 }
 
 // launchWithRetry attempts to launch an application with retry logic
-func (al *ApplicationLauncher) launchWithRetry(proc ProcessInfo) LaunchResult {
+func (al *ApplicationLauncher) launchWithRetry(proc types.ProcessInfo) types.LaunchResult {
 	maxRetries := config.GlobalConfig.MaxRetryAttempts
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
@@ -90,7 +84,7 @@ func (al *ApplicationLauncher) launchWithRetry(proc ProcessInfo) LaunchResult {
 
 	// All Retries Attempt Failed
 	system.Error("Failed to launch", proc.Name, "after", maxRetries, "attempts")
-	return LaunchResult{
+	return types.LaunchResult{
 		AppName: proc.Name,
 		Success: false,
 		LaunchTime: time.Now(),
@@ -100,7 +94,7 @@ func (al *ApplicationLauncher) launchWithRetry(proc ProcessInfo) LaunchResult {
 }
 
 // launchApplication launches a single application
-func (al *ApplicationLauncher) launchApplication(proc ProcessInfo) LaunchResult {
+func (al *ApplicationLauncher) launchApplication(proc types.ProcessInfo) types.LaunchResult {
 	startTime  := time.Now()
 
 	// Use 'open -a' command for fast, reliable launching
@@ -108,7 +102,7 @@ func (al *ApplicationLauncher) launchApplication(proc ProcessInfo) LaunchResult 
 
 	err := cmd.Start()
 	if err != nil {
-		return LaunchResult{
+		return types.LaunchResult{
 			AppName: proc.Name,
 			Success: false,
 			LaunchTime: startTime,
@@ -118,7 +112,7 @@ func (al *ApplicationLauncher) launchApplication(proc ProcessInfo) LaunchResult 
 	// Wait for the command to complete
 	err = cmd.Wait()
 	if err != nil {
-		return LaunchResult{
+		return types.LaunchResult{
 			AppName: proc.Name,
 			Success: false,
 			LaunchTime: startTime,
@@ -131,7 +125,7 @@ func (al *ApplicationLauncher) launchApplication(proc ProcessInfo) LaunchResult 
 	// Verify the application actually started
 	pid, isRunning := al.verifyApplicationLaunched(proc.ProcessName)
 	if !isRunning {
-		return LaunchResult{
+		return types.LaunchResult{
 			AppName: proc.Name,
 			Success: false,
 			LaunchTime: startTime,
@@ -140,7 +134,7 @@ func (al *ApplicationLauncher) launchApplication(proc ProcessInfo) LaunchResult 
 	}
 
 
-	return LaunchResult{
+	return types.LaunchResult{
 		AppName: proc.Name,
 		Success: true,		
 		PID: 	 pid,	
@@ -177,7 +171,7 @@ func (al *ApplicationLauncher) isApplicationRunning(processName string) bool {
 
 
 // restoreWindowState restores the window state for a launched application
-func (al *ApplicationLauncher) restoreWindowState(proc ProcessInfo, pid int) {
+func (al *ApplicationLauncher) restoreWindowState(proc types.ProcessInfo, pid int) {
 	system.Debug("Restoring window state for", proc.Name, "to", proc.WindowState)
 
 	var script string
@@ -236,8 +230,8 @@ func (al *ApplicationLauncher) showSuccessNotification(appName string) {
 }
 
 // GetFailedApplications returns applications that failed to launch
-func (al *ApplicationLauncher) GetFailedApplications() []LaunchResult {
-	var failed []LaunchResult
+func (al *ApplicationLauncher) GetFailedApplications() []types.LaunchResult {
+	var failed []types.LaunchResult
 	for _, result := range al.results {
 		if !result.Success {
 			failed = append(failed, result)
@@ -247,8 +241,8 @@ func (al *ApplicationLauncher) GetFailedApplications() []LaunchResult {
 }
 
 // GetSuccessfulApplications returns application that launched successfully
-func (al *ApplicationLauncher) GetSuccessfulApplications() []LaunchResult {
-	var successful []LaunchResult
+func (al *ApplicationLauncher) GetSuccessfulApplications() []types.LaunchResult {
+	var successful []types.LaunchResult
 	for _, result := range al.results {
 		if result.Success {
 			successful = append(successful, result)

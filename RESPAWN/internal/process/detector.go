@@ -7,19 +7,10 @@ import (
 	"strconv"
 	"strings"
 	"RESPAWN/internal/system"
+	"RESPAWN/internal/types"
 	"RESPAWN/pkg/config"
 	
 )
-
-type ProcessInfo struct {
-	PID 		int 	`json:"pid"`
-	Name        string `json:"name"`
-    ProcessName string `json:"process_name"`
-    MemoryMB    int64  `json:"memory_mb"`
-    WindowState string `json:"window_state"` // "normal", "minimized", "maximized"
-    IsRunning   bool   `json:"is_running"`
-
-}
 
 type ProcessDetector struct {
 	enabledApps []config.AppConfig
@@ -33,10 +24,10 @@ func NewProcessDetector() *ProcessDetector {
 }
 
 // DetectRunningProcesses finds all enabled applications that are currently running
-func (pd *ProcessDetector) DetectRunningProcesses() ([]ProcessInfo, error) {
+func (pd *ProcessDetector) DetectRunningProcesses() ([]types.ProcessInfo, error) {
     system.Debug("Starting process detection")
 
-	var runningProcesses []ProcessInfo
+	var runningProcesses []types.ProcessInfo
 
 
 	for _, app := range pd.enabledApps {
@@ -56,8 +47,8 @@ func (pd *ProcessDetector) DetectRunningProcesses() ([]ProcessInfo, error) {
 }
 
 // getProcessInfo gets detailed information about a specific application
-func (pd *ProcessDetector) getProcessInfo(app config.AppConfig) (ProcessInfo, error) {
-	ProcessInfo := ProcessInfo{
+func (pd *ProcessDetector) getProcessInfo(app config.AppConfig) (types.ProcessInfo, error) {
+	ProcessInfo := types.ProcessInfo{
 		Name:        app.Name,
 		ProcessName: app.ProcessName,
 		IsRunning:   false,
@@ -146,9 +137,9 @@ func (pd *ProcessDetector) getWindowState(pid int) (string, error) {
 	return "normal", nil
 }
 
-func SortByMemoryUsage(processes []ProcessInfo) []ProcessInfo {
+func SortByMemoryUsage(processes []types.ProcessInfo) []types.ProcessInfo {
 	// Simple bubble sort for demonstartion purposes. (one could use sort.Slice for better performance)
-	sorted := make([]ProcessInfo, len(processes))
+	sorted := make([]types.ProcessInfo, len(processes))
 	copy(sorted, processes)
 
 	for i := 0; i < len(sorted)-1; i++ {

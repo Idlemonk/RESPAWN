@@ -7,30 +7,25 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"RESPAWN/internal/process"
-	"RESPAWN/internal/system"
-	"RESPAWN/pkg/config"
 
+
+	"RESPAWN/internal/system"
+	"RESPAWN/internal/process"
+	"RESPAWN/internal/types"
+	"RESPAWN/pkg/config"
+	
 )
 
 type CheckpointManager struct {
 	checkpointDir string
 	storage       *Storage 
-	detector 	  *process.ProcessDetector
+	detector      *process.ProcessDetector
 }
 
-type Checkpoint struct {
-	ID          string              `json:"id"`
-    Timestamp   time.Time           `json:"timestamp"`
-    Processes   []process.ProcessInfo `json:"processes"`
-    AppNames    []string            `json:"app_names"`
-    IsCompressed bool               `json:"is_compressed"`
-    FilePath    string              `json:"file_path"`
-    FileSize    int64               `json:"file_size"`
-}
+
 
 type CheckpointList struct {
-    Checkpoints    []Checkpoint `json:"checkpoints"`
+    Checkpoints    []types.Checkpoint `json:"checkpoints"`
     LastUsed       string       `json:"last_used"`
     TotalCount     int          `json:"total_count"`
     CompressedCount int         `json:"compressed_count"`
@@ -55,13 +50,13 @@ func NewCheckpointManager() (*CheckpointManager, error) {
 
 	return &CheckpointManager{
 		checkpointDir: checkpointDir,
-        storage:       storage,
-        detector:      process.NewProcessDetector(),
+        storage:           storage,
+		detector:	      process.NewProcessDetector(),	
     }, nil
 }
 
 // Creates a new system checkpoint
-func (cm *CheckpointManager) CreateCheckpoint() (*Checkpoint, error) {
+func (cm *CheckpointManager) CreateCheckpoint() (*types.Checkpoint, error) {
 	system.Info("Creating new checkpoint")
 
 	// Detect running processes
@@ -71,7 +66,7 @@ func (cm *CheckpointManager) CreateCheckpoint() (*Checkpoint, error) {
 	}
 
 	if len(processes) == 0 {
-		system.Warn ("No target application running, Empty checkpoint created")
+		system.Warn ("No target application running, creating empty checkpoint")
 	}
 
 	// Create Checkpoint
@@ -84,14 +79,14 @@ func (cm *CheckpointManager) CreateCheckpoint() (*Checkpoint, error) {
 		appNames[i] = proc.Name
 	}
 
-	checkpoint := &Checkpoint{
+	checkpoint := &types.Checkpoint{
         ID:          checkpointID,
         Timestamp:   timestamp,
         Processes:   processes,
         AppNames:    appNames,
         IsCompressed: false,	
 	}
-
+	
 	// Save checkpoint to storage
 	filePath, fileSize, err := cm.storage.SaveCheckpoint(checkpoint) 
 	if err != nil {
@@ -137,11 +132,11 @@ func (cm *CheckpointManager) GetAvailableCheckpoints() (*CheckpointList, error) 
 }
 
 // RestoreFromCheckpoint restores system state from a specific checkpoint
-func (cm *CheckpointManager) RestoreFromCheckpoint(checkpointID string) ([]process.LaunchResult, error) {
+func (cm *CheckpointManager) RestoreFromCheckpoint(checkpointID string) ([]types.LaunchResult, error) {
 	system.Info("Restoring from checkpoint:", checkpointID)
 
 	// Load the specific checkpoint
-	checkpoint, err := cm.storage.LoadCheckpointByID(checkpointID)
+	checkpoint, err := cm.storage.LoadCheckpoint(checkpointID)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to load checkpoint %s: %w", checkpointID, err)
 	}
@@ -170,7 +165,7 @@ func (cm *CheckpointManager) RestoreFromCheckpoint(checkpointID string) ([]proce
 } 
 
 // RestoreLatestCheckpoint restores from the most recent checkpoint
-func (cm *CheckpointManager) RestoreLatestCheckpoint() ([]process.LaunchResult, error) {
+func (cm *CheckpointManager) RestoreLatestCheckpoint() ([]types.LaunchResult, error) {
 	system.Info("Restoring from latest checkpoint")
 
 	checkpointList, err := cm.GetAvailableCheckpoints()
@@ -241,7 +236,7 @@ func (cm *CheckpointManager) PerformMaintenanceTasks() error {
 // Helper functions
 
 //formatCheckpointName creates descriptive checkpoint name 
-func (cm *CheckpointManager) formatCheckpointName(checkpoint *Checkpoint) string {
+func (cm *CheckpointManager) formatCheckpointName(checkpoint *types.Checkpoint) string {
 	appList := strings.Join(checkpoint.AppNames, ", ")
 	if appList == "" {
 		appList = "No applications"
@@ -250,7 +245,7 @@ func (cm *CheckpointManager) formatCheckpointName(checkpoint *Checkpoint) string
 }
 
 // getLastUsedCheckpoint determines which checkpoit was last used for restoration
-func (cm *CheckpointManager) getLastUsedCheckpoint(checkpoints []Checkpoint) string {
+func (cm *CheckpointManager) getLastUsedCheckpoint(checkpoints []types.Checkpoint) string {
 	// For now, we'll implement this as a simple file-based tracking
 	// in a more sophisticated version, this would be stored in metadata
 	return ""
@@ -278,7 +273,7 @@ func (cm *CheckpointManager) cleanOldCheckpoints() error {
 
 	system.Debug("Cleaning checkpoints older than", retentionDays, "days")
 
-	return cm.storage.cleanOldCheckpoints(cutoffTime)
+	return cm.storage.CleanOldCheckpoints(cutoffTime)
 }
 
 // compressOldCheckpoints compresses checkpoints older than 24 hours from last used 

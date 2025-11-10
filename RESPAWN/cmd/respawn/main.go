@@ -3,26 +3,23 @@
 package main
 
 import (
-	"RESPAWN/internal/checkpoint"
-	"RESPAWN/internal/process"
-	"RESPAWN/internal/system"
-	"RESPAWN/internal/ui"
-	"RESPAWN/pkg/config"
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
+    "os/signal"
+    "syscall"
 	"path/filepath"
-	"respawn/internal/checkpoint"
-	"respawn/internal/process"
-	"respawn/internal/system"
-	"respawn/internal/ui"
-	"respawn/pkg/config"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
+
+    "RESPAWN/internal/checkpoint"
+	"RESPAWN/internal/process"
+	"RESPAWN/internal/system"
+    "RESPAWN/internal/types"
+	"RESPAWN/internal/ui"
+	"RESPAWN/pkg/config"
 )
 
 
@@ -293,11 +290,11 @@ func initializeComponents() error {
     system.Debug("Process detector initialized ✓")
 
     // Phase 6: Application Launcher
-    app.Launcher = process.NewApplicationLauncher()
+    app.launcher = process.NewApplicationLauncher()
     system.Debug("Application launcher initialized ✓")
 
     // Phase 7: System Monitor
-    monitor, err := system.NewSystemMonitior()
+    monitor, err := system.NewSystemMonitor()
     if err != nil {
         return fmt.Errorf("System monitor initialization failed: %w", err)
     }
@@ -466,7 +463,7 @@ func handleRestore() error {
     }
 
     checkpointMgr, err := checkpoint.NewCheckpointManager()
-    if err := nil {
+    if err != nil {
         return fmt.Errorf("Checkpoint manager creation failed: %w", err)
     }
     app.checkpointManager = checkpointMgr
@@ -474,7 +471,7 @@ func handleRestore() error {
     app.launcher = process.NewApplicationLauncher()
     app.notificationManager = ui.NewNotificationManager()
 
-    var results []process.LaunchResult
+    var results []types.LaunchResult
 
     // Restore from specific checkpoint or latest
     if checkpointID != "" {
@@ -502,7 +499,7 @@ func handleRestore() error {
     successful, failed, failedApps := app.launcher.GetLaunchSummary()
 
     if !silentMode {
-        summary := ui.R{
+        summary := types.RestoreSummary{
             TotalApps:      successful + failed,
             SuccessfulApps: successful,
             FailedApps:     failed,
@@ -581,7 +578,7 @@ func handleStatus() error {
     //Display Status
     fmt.Println("\n=== RESPAWN STATUS ===")
     fmt.Printf("Version: %s\n", Version)
-    fmt.Printf("Auto-start: %s\n", boolToStatus(startupMgr.autoStart.IsEnabled()))
+    fmt.Printf("Auto-start: %s\n", boolToStatus(startupMgr.IsEnabled()))
     fmt.Printf("\nCheckpoints:\n")
     fmt.Printf("  Total: %d\n", checkpointList.TotalCount)
     fmt.Printf("  Compressed: %d\n", checkpointList.CompressedCount)
@@ -657,7 +654,8 @@ func handleResume() error {
 
 // setupGracefulShutdown handles graceful shutdown or signals 
 func setupGracefulShutdown() {
-    sigChan := make(sigChan, syscall.SIGINT, syscall.SIGTERM)
+    sigChan :=  make(chan os.Signal, 1)
+    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
     go func() {
         sig := <-sigChan
@@ -692,7 +690,7 @@ func gracefulShutdown() error {
         // 2+ hours - ask user
         system.Info("Last checkpoint over 2 hours ago, asking user")
 
-        response, err := app.notificationManager.ShowPermissionRequest(
+        _, err := app.notificationManager.ShowPermissionRequest(
             "Checkpoint",
             "Last checkpoint was over 2 hours ago.\nCreate checkpoint before quitting?",
         )

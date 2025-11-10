@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"RESPAWN/internal/types"
 	"RESPAWN/pkg/config"
-	"golang.org/x/text/message"
 )
 
 // StartupManager handles application lifecycle and auto-start
@@ -48,42 +48,46 @@ type RestartPolicy struct {
 
 //NewStartupManager creates a new startup manager 
 func NewStartupManager() (*StartupManager, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to get executable path: %w", err)
-	}
+    // Get the executable path
+    execPath, err := os.Executable()
+    if err != nil {
+        return nil, fmt.Errorf("failed to get executable path: %w", err)
+    }
+    
+    // Get the base directory (where the executable lives)
+    baseDir := filepath.Dir(execPath)
 
-	// create macOS auto-start manager
-	autoStart := NewMacOSAutoStart(execPath)
+    // create macOS auto-start manager
+    autoStart := NewMacOSAutoStart(execPath)
 
-	// Initialize instance lock
-	instanceLock := &InstanceLock{
-		lockFile: filepath.Join(baseDir, "respawn.lock"),
-		pidFile: filepath.Join(baseDir, "respawn.pid"),
-		pid: 	os.Getpid(),
-	}
+    // Initialize instance lock
+    instanceLock := &InstanceLock{
+        lockFile: filepath.Join(baseDir, "respawn.lock"),
+        pidFile:  filepath.Join(baseDir, "respawn.pid"),
+        pid:      os.Getpid(),
+    }
 
-	// Initialize crash tracker
-	crashTracker := &CrashTracker{
-		crashes:  			make([]time.Time, 0),
-		maxCrashes:         3, // Disable after 3 crashes
-		windowPeriod: 		1 * time.Hour,
-		stateFile: 			filepath.Join(baseDir, "crash_state.json"),	
-	}
+    // Initialize crash tracker
+    crashTracker := &CrashTracker{
+        crashes:      make([]time.Time, 0),
+        maxCrashes:   3, // Disable after 3 crashes
+        windowPeriod: 1 * time.Hour,
+        stateFile:    filepath.Join(baseDir, "crash_state.json"),	
+    }
 
-	if err := crashTracker.Load(); err != nil {
-		Debug("No previous crash state found, starting fresh")
-	}
+    if err := crashTracker.Load(); err != nil {
+        Debug("No previous crash state found, starting fresh")
+    }
 
-	sm := &StartupManager{
-		autoStart:       autoStart,
-		instanceLock:    instanceLock,
-		crashTracker:    crashTracker,
-		baseDir:	 	 baseDir,
-		executablePath:  execPath,
-	}
+    sm := &StartupManager{
+        autoStart:      autoStart,
+        instanceLock:   instanceLock,
+        crashTracker:   crashTracker,
+        baseDir:        baseDir,
+        executablePath: execPath,
+    }
 
-	return sm, nil 
+    return sm, nil 
 }
 
 // EnsureSingleInstance checks if another instance is running
@@ -91,7 +95,7 @@ func (sm *StartupManager) EnsureSingleInstance() error {
 	Debug("Checking for existing RESPAWN instance")
 
 	// Check if lock file exists
-	if _, err := os.Stat(sm.instaceLock.lockFile); err == nil {
+	if _, err := os.Stat(sm.instanceLock.lockFile); err == nil {
 	// Lock file exists, check if process is still running
 	pidData, err := os.ReadFile(sm.instanceLock.pidFile)
 		if err == nil {
@@ -154,7 +158,7 @@ func (sm *StartupManager) Uninstall() error {
 	Info("Uninstalling RESPAWN auto-start")
 
 	if !sm.autoStart.IsInstalled() {
-		Info("RESPAWN auto-start not instaled")
+		Info("RESPAWN auto-start not installed")
 		return nil
 	}
 
@@ -207,6 +211,15 @@ func (sm *StartupManager) DisableAutoStart() error {
 
 	return nil
 }
+
+// IsEnabled returns whether auto-start is currently enabled
+func (sm *StartupManager) IsEnabled() bool {
+    if sm.autoStart == nil {
+        return false
+    }
+    return sm.autoStart.IsEnabled()
+}
+
 // StartWithPolicy starts RESPAWN with restart policy  
 func (sm *StartupManager) StartWithPolicy() error {
 	startTime := time.Now()
@@ -265,7 +278,7 @@ func (sm *StartupManager) initialize() error {
 		return fmt.Errorf("Failed to load configuration: %w", err)
 	}
 	
-	// Check perrmissions
+	// Check permissions
 	if err := sm.checkMacOSPermissions(); err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}
@@ -290,7 +303,7 @@ func (sm *StartupManager) checkMacOSPermissions() error {
 		sm.showPermissionDialog(
 			"Accessibility Access Required",
 			"RESPAWN needs Accessibility access to detect window states. \n\n"+
-				"Please grant permission in:\nSystem Preferencesn -> Security & Privacy -> Privacy -> Accessibility",
+				"Please grant permission in:\nSystem Preferences -> Security & Privacy -> Privacy -> Accessibility",
 		)
 		return fmt.Errorf("Accessibility permission required")
 	}
@@ -351,7 +364,7 @@ func (sm *StartupManager) recordCrash() {
 }
 
 //RestartWithBackoff restarts RESPAWN with exponential backoff
-func (sm *StartupManager) RestartWithBackoff(policy *RestartPolicy) error {
+func (sm *StartupManager) RestartWithBackoff(policy *types.RestartPolicy) error {
 	if policy.CurrentRetry >= policy.MaxRetries {
 		Error("Max restart retries exceeded")
 		return fmt.Errorf("max restart retries (%d) exceeded", policy.MaxRetries)
@@ -383,8 +396,8 @@ func (sm *StartupManager) RestartWithBackoff(policy *RestartPolicy) error {
 }
 
 // GetDefaultRestartPolicy returns the default restart policy
-func GetDefaultRestartPolicy() *RestartPolicy {
-	return &RestartPolicy{
+func GetDefaultRestartPolicy() *types.RestartPolicy {
+	return &types.RestartPolicy{
 		MaxRetries: 3,
 		BackoffIntervals: []time.Duration{
 			5 * time.Second,  // First retry: 5 seconds 
