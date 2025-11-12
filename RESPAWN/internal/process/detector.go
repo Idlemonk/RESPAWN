@@ -46,6 +46,43 @@ func (pd *ProcessDetector) DetectRunningProcesses() ([]types.ProcessInfo, error)
 	return runningProcesses, nil 
 }
 
+// GetRunningApplications returns list of all running GUI applications
+func (pd *ProcessDetector) GetRunningApplications() ([]types.ApplicationInfo, error) {
+    // Use AppleScript to get running applications
+    script := `
+        tell application "System Events"
+            set appList to name of every application process whose background only is false
+            return appList
+        end tell
+    `
+    
+    cmd := exec.Command("osascript", "-e", script)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf(" Failed to get applications: %w", err)
+	}
+
+	// Parse output
+	appNames := strings.Split(strings.TrimSpace(string(output)), ", ")
+
+	var apps []types.ApplicationInfo
+	for _, name := range appNames {
+		// Skip system Apps
+		if isSystemApp(name) {
+			continue
+		}
+
+		appInfo, err := pd.getApplicationInfo(name)
+		if err != nil {
+			continue // Skip apps we can't get info for
+		}
+
+		apps = append(apps, appInfo)
+	}
+
+	return apps, nil
+}
+
 // getProcessInfo gets detailed information about a specific application
 func (pd *ProcessDetector) getProcessInfo(app config.AppConfig) (types.ProcessInfo, error) {
 	ProcessInfo := types.ProcessInfo{
@@ -137,8 +174,95 @@ func (pd *ProcessDetector) getWindowState(pid int) (string, error) {
 	return "normal", nil
 }
 
+// getApplicationInfo gets detailed info for an application
+func (pd *ProcessDetector) getApplicationInfo(appName string) (types.ApplicationInfo, error) {
+	var info types.ApplicationInfo
+
+	// get bundle ID
+	script := fmt.Sprintf(`
+        tell application "System Events"
+            set appProcess to first application process whose name is "%s"
+            set bundleID to bundle identifier of appProcess
+            return bundleID
+        end tell
+    `, appName)
+
+	cmd := exec.Command("osascript", "-e", script)
+	output, err := cmd.Output()
+	if err != nil {
+		return info, err 
+	}
+
+	info.Name = appName	
+	info.BundleID = strings.TrimSpace(string(output))
+	info.ExecutablePath = fmt.Sprintf("/Applications/%s.app", appName)
+
+	// Get window information
+	windows, err := pd.getWindowInfo(appName)
+	if err == nil {
+		info.Windows = windows 
+	}
+
+	return info, nil
+}
+
+// getWindowInfo gets window positions for an application
+func (pd *ProcessDetector) getWindowInfo(appName string) ([]types.WindowInfo, error) {
+	script := fmt.Sprintf(`
+        tell application "System Events"
+            tell process "%s"
+                set windowList to {}
+                repeat with w in windows
+                    set windowInfo to {name of w, position of w, size of w}
+                    set end of windowList to windowInfo
+                end repeat
+                return windowList
+            end tell
+        end tell
+    `, appName)
+
+	cmd := exec.Command("osascript", "-e", script)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse window data (simplified)
+	// TODO: Proper parsing of AppleScript output
+	outputStr := strings.TrimSpace(string(output))
+	var windows []types.WindowInfo
+
+	// Example simple parsing: Split by app-specific delimiters (e.g., assume output like "window1:{x,y},size{w,h}; ...")
+	// For now, return empty if not parsable-expand as needed
+	if !strings.Contains(outputStr, "no windows") {  // Basic check like getWindowState
+		// Placeholder: Add real split/logic here, e.g., strings.Split(outputStr, ";")
+		// windows = append(windows, types.WindowInfo{Title: "Example", ...})  // Stub for testing
+	}
+
+	return window, nil
+}
+
+// isSystemApp checks if app should be excluded
+func isSystemApp(appName string) bool {
+    systemApps := []string{
+        "Finder",
+        "Dock",
+        "SystemUIServer",
+        "loginwindow",
+        "NotificationCenter",
+    }
+    
+    for _, sys := range systemApps {
+        if appName == sys {
+            return true
+        }
+    }
+    
+    return false
+}
+
 func SortByMemoryUsage(processes []types.ProcessInfo) []types.ProcessInfo {
-	// Simple bubble sort for demonstartion purposes. (one could use sort.Slice for better performance)
+	// Simple bubble sort for demonstration purposes. (one could use sort.Slice for better performance)
 	sorted := make([]types.ProcessInfo, len(processes))
 	copy(sorted, processes)
 
