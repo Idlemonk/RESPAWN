@@ -413,6 +413,10 @@ func handleUninstall() error {
 func handleStart() error {
     system.Info("Starting RESPAWN")
 
+    // Always  daemonize on start
+    if err := daemonize(); err != nil {
+        return fmt.Errorf("Failed to daemonize: %w", err)
+    }
     app = &RESPAWNApp{
         startTime: time.Now(),
         isRunning: true,
@@ -433,7 +437,7 @@ func handleStart() error {
         system.Warn("Failed to show active notification:", err)
     }
 
-    // Start monitoring
+    // Start monitoring 
     if err := app.monitor.Start(); err != nil {
         return fmt.Errorf("monitor start failed: %w", err)
     }
@@ -442,9 +446,53 @@ func handleStart() error {
     setupGracefulShutdown()
 
     system.Info("RESPAWN is now running...")
+    system.Info("Next checkpoint in:", config.GlobalConfig.CheckpointInterval)
 
     // Keep running until interrupted
     select{}
+}
+
+// daemonize forks the process and exits the parent
+func daemonize() error {
+    // Check if already a daemon
+    if os.Getppid() == 1 {
+        return nil // Already daemonized
+    }
+    // Fork the process
+    cmd := exec.Command(os.Args[0], os.Args[1:]...)
+    cmd.Stdout = nil
+    cmd.Stderr = nil
+    cmd.Stdin = nil
+
+    if err := cmd.Start(); err != nil {
+        return err
+    }
+    // Parent exits, child continues
+    fmt.Printf("RESPAWN started in background (PID: %d)\n", cmd.Process.Pid)
+    os.Exit(0)
+
+    return nil
+}
+
+// Helper to check if running in background
+func isBackgroundMode() bool {
+    // Checks if parent process is launchd (PID 1)
+    return os.Getppid() == 1
+}
+
+// Start process in background
+func startInBackground() error {
+    cmd := exec.Command(os.Args[0], "start", "--background")
+    cmd.Stdout = nil
+    cmd.Stderr = nil
+
+    if err := cmd.Start(); err != nil {
+        return fmt.Errorf("Failed to start in background: %w", err)
+    }
+
+    fmt.Printf("✅ RESPAWN started in background (PID: %d)\n", cmd.Process.Pid)
+    os.Exit(0)
+    return nil
 }
 
 // handleRestore processes the restore command
@@ -569,6 +617,19 @@ func handleStatus() error {
         return fmt.Errorf("Startup manager creation failed: %w", err)
     }
 
+    // Check if RESPAWN is running
+    isRunning := false
+    pidFile := filepath.Join(os.Getenv("HOME"), ".respawn", "respawn.pid")
+    if pidData, err := os.ReadFile(pidFile); err == nil {
+        if pid, err := strconv.Atoi(strings.TrimSpace(string(pidData))); err == nil {
+            if process, err := os.FindProcess(pid); err == nil {
+                if err := process.Signal(syscall.Signal(0)); err == nil {
+                    isRunning = true
+                }
+            }
+        }
+    }
+
     // Get checkpoint list
     checkpointList, err := checkpointMgr.GetAvailableCheckpoints()
     if err != nil {
@@ -578,20 +639,56 @@ func handleStatus() error {
     //Display Status
     fmt.Println("\n=== RESPAWN STATUS ===")
     fmt.Printf("Version: %s\n", Version)
+    fmt.Printf("Running: %s\n", boolToStatus(isRunning))
     fmt.Printf("Auto-start: %s\n", boolToStatus(startupMgr.IsEnabled()))
-    fmt.Printf("\nCheckpoints:\n")
-    fmt.Printf("  Total: %d\n", checkpointList.TotalCount)
-    fmt.Printf("  Compressed: %d\n", checkpointList.CompressedCount)
     
+    // Show pause state
+    pauseFile := filepath.Join(os.Getenv("HOME"), ".respawn", "paused")
+    if _, err := os.Stat(pauseFile); err == nil {
+        fmt.Printf("Status: ⏸️  PAUSED\n")
+    } else if isRunning {
+        fmt.Printf("Status: ✅ ACTIVE - Monitoring\n")
+    } else {
+        fmt.Printf("Status: ❌ STOPPED\n")
+    }
+    
+    fmt.Printf("\nCheckpoints:\n")
+    fmt.Printf("  Total: %d\n", checkpointList.TotalCount)    
+
     if len(checkpointList.Checkpoints) > 0 {
         latest := checkpointList.Checkpoints[0]
         fmt.Printf("  Latest: %s\n", latest.ID)
+        fmt.Printf("  Created: %s\n", latest.Timestamp.Format("2006-01-02 15:04:05"))
         fmt.Printf("  Apps in latest: %d\n", len(latest.AppNames))
+        
+        if len(latest.AppNames) > 0 {
+            fmt.Printf("  Applications:\n")
+            for i, app := range latest.AppNames {
+                if i >= 10 {
+                    fmt.Printf("    ... and %d more\n", len(latest.AppNames)-10)
+                    break
+                }
+                fmt.Printf("    - %s\n", app)
+            }
+        }
+        
+        // Show next checkpoint time
+        if isRunning {
+            nextCheckpoint := latest.Timestamp.Add(config.GlobalConfig.CheckpointInterval)
+            timeUntil := time.Until(nextCheckpoint)
+            if timeUntil > 0 {
+                fmt.Printf("\n  Next checkpoint in: %s\n", timeUntil.Round(time.Minute))
+            } else {
+                fmt.Printf("\n  Next checkpoint: Overdue (should create soon)\n")
+            }
+        }
+    } else {
+        fmt.Printf("  No checkpoints yet\n")
     }
     
     fmt.Printf("\nConfiguration:\n")
-    fmt.Printf("  Data retention: %d days\n", config.GlobalConfig.DataRetentionDays)
     fmt.Printf("  Checkpoint interval: %v\n", config.GlobalConfig.CheckpointInterval)
+    fmt.Printf("  Data retention: %d days\n", config.GlobalConfig.DataRetentionDays)
     
     return nil
 }
