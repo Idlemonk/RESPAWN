@@ -47,7 +47,11 @@ func (pd *ProcessDetector) DetectRunningProcesses() ([]types.ProcessInfo, error)
 }
 
 // GetRunningApplications returns list of all running GUI applications
+<<<<<<< HEAD
 func (pd *ProcessDetector) GetRunningApplications() ([]types.ApplicationInfo, error) {
+=======
+func (pd *ProcessDetector) GetRunningApplications() ([]ApplicationInfo, error) {
+>>>>>>> 0dcb4dc2d24cd8117198084eb96667f1b9bfff7b
     // Use AppleScript to get running applications
     script := `
         tell application "System Events"
@@ -65,7 +69,11 @@ func (pd *ProcessDetector) GetRunningApplications() ([]types.ApplicationInfo, er
 	// Parse output
 	appNames := strings.Split(strings.TrimSpace(string(output)), ", ")
 
+<<<<<<< HEAD
 	var apps []types.ApplicationInfo
+=======
+	var apps []ApplicationInfo
+>>>>>>> 0dcb4dc2d24cd8117198084eb96667f1b9bfff7b
 	for _, name := range appNames {
 		// Skip system Apps
 		if isSystemApp(name) {
@@ -174,6 +182,7 @@ func (pd *ProcessDetector) getWindowState(pid int) (string, error) {
 	return "normal", nil
 }
 
+<<<<<<< HEAD
 // getApplicationInfo gets detailed info for an application
 func (pd *ProcessDetector) getApplicationInfo(appName string) (types.ApplicationInfo, error) {
 	var info types.ApplicationInfo
@@ -260,6 +269,9 @@ func isSystemApp(appName string) bool {
     
     return false
 }
+=======
+
+>>>>>>> 0dcb4dc2d24cd8117198084eb96667f1b9bfff7b
 
 func SortByMemoryUsage(processes []types.ProcessInfo) []types.ProcessInfo {
 	// Simple bubble sort for demonstration purposes. (one could use sort.Slice for better performance)
