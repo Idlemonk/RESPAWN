@@ -47,7 +47,11 @@ func (pd *ProcessDetector) DetectRunningProcesses() ([]types.ProcessInfo, error)
 }
 
 // GetRunningApplications returns list of all running GUI applications
+<<<<<<< HEAD
 func (pd *ProcessDetector) GetRunningApplications() ([]types.ApplicationInfo, error) {
+=======
+func (pd *ProcessDetector) GetRunningApplications() ([]ApplicationInfo, error) {
+>>>>>>> 0dcb4dc2d24cd8117198084eb96667f1b9bfff7b
     // Use AppleScript to get running applications
     script := `
         tell application "System Events"
@@ -65,7 +69,11 @@ func (pd *ProcessDetector) GetRunningApplications() ([]types.ApplicationInfo, er
 	// Parse output
 	appNames := strings.Split(strings.TrimSpace(string(output)), ", ")
 
+<<<<<<< HEAD
 	var apps []types.ApplicationInfo
+=======
+	var apps []ApplicationInfo
+>>>>>>> 0dcb4dc2d24cd8117198084eb96667f1b9bfff7b
 	for _, name := range appNames {
 		// Skip system Apps
 		if isSystemApp(name) {
@@ -200,7 +208,7 @@ func (pd *ProcessDetector) getApplicationInfo(appName string) (types.Application
 	// Get window information
 	windows, err := pd.getWindowInfo(appName)
 	if err == nil {
-		info.Windows = windows 
+		info.Windows = windowsFromAppleScript
 	}
 
 	return info, nil
