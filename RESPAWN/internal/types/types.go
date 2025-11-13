@@ -44,9 +44,9 @@ type ProcessInfo struct {
 
 // New embedding: Extend ProcessInfo with WindowInfo slice
 type ExtendedProcessInfo struct {
-    types.ProcessInfo  // Embed base (inherits Name, PID, etc.)
-    Windows []WindowInfo  // Add GUI slice directly
+    Windows []WindowInfo      // Augmented GUI window slice
 }
+
 
 // LaunchResult represents the result of launching an application
 type LaunchResult struct {

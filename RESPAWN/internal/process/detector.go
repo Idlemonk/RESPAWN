@@ -47,11 +47,7 @@ func (pd *ProcessDetector) DetectRunningProcesses() ([]types.ProcessInfo, error)
 }
 
 // GetRunningApplications returns list of all running GUI applications
-<<<<<<< HEAD
 func (pd *ProcessDetector) GetRunningApplications() ([]types.ApplicationInfo, error) {
-=======
-func (pd *ProcessDetector) GetRunningApplications() ([]ApplicationInfo, error) {
->>>>>>> 0dcb4dc2d24cd8117198084eb96667f1b9bfff7b
     // Use AppleScript to get running applications
     script := `
         tell application "System Events"
@@ -69,11 +65,7 @@ func (pd *ProcessDetector) GetRunningApplications() ([]ApplicationInfo, error) {
 	// Parse output
 	appNames := strings.Split(strings.TrimSpace(string(output)), ", ")
 
-<<<<<<< HEAD
 	var apps []types.ApplicationInfo
-=======
-	var apps []ApplicationInfo
->>>>>>> 0dcb4dc2d24cd8117198084eb96667f1b9bfff7b
 	for _, name := range appNames {
 		// Skip system Apps
 		if isSystemApp(name) {
@@ -181,7 +173,6 @@ func (pd *ProcessDetector) getWindowState(pid int) (string, error) {
 
 	return "normal", nil
 }
-
 // getApplicationInfo gets detailed info for an application
 func (pd *ProcessDetector) getApplicationInfo(appName string) (types.ApplicationInfo, error) {
 	var info types.ApplicationInfo
@@ -208,7 +199,7 @@ func (pd *ProcessDetector) getApplicationInfo(appName string) (types.Application
 	// Get window information
 	windows, err := pd.getWindowInfo(appName)
 	if err == nil {
-		info.Windows = windowsFromAppleScript
+		info.Windows = windows
 	}
 
 	return info, nil
@@ -247,7 +238,7 @@ func (pd *ProcessDetector) getWindowInfo(appName string) ([]types.WindowInfo, er
 		// windows = append(windows, types.WindowInfo{Title: "Example", ...})  // Stub for testing
 	}
 
-	return window, nil
+	return windows, nil
 }
 
 // isSystemApp checks if app should be excluded
@@ -268,6 +259,7 @@ func isSystemApp(appName string) bool {
     
     return false
 }
+
 
 func SortByMemoryUsage(processes []types.ProcessInfo) []types.ProcessInfo {
 	// Simple bubble sort for demonstration purposes. (one could use sort.Slice for better performance)
