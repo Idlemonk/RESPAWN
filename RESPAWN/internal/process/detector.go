@@ -1,15 +1,13 @@
 package process
 
 import (
-
+	"RESPAWN/internal/system"
+	"RESPAWN/internal/types"
+	"RESPAWN/pkg/config"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
-	"RESPAWN/internal/system"
-	"RESPAWN/internal/types"
-	"RESPAWN/pkg/config"
-	
 )
 
 type ProcessDetector struct {
@@ -25,10 +23,9 @@ func NewProcessDetector() *ProcessDetector {
 
 // DetectRunningProcesses finds all enabled applications that are currently running
 func (pd *ProcessDetector) DetectRunningProcesses() ([]types.ProcessInfo, error) {
-    system.Debug("Starting process detection")
+	system.Debug("Starting process detection")
 
 	var runningProcesses []types.ProcessInfo
-
 
 	for _, app := range pd.enabledApps {
 		processInfo, err := pd.getProcessInfo(app)
@@ -40,23 +37,23 @@ func (pd *ProcessDetector) DetectRunningProcesses() ([]types.ProcessInfo, error)
 		if processInfo.IsRunning {
 			runningProcesses = append(runningProcesses, processInfo)
 			system.Debug("Found running process:", app.Name, "PID:", processInfo.PID, "Memory:", processInfo.MemoryMB, "MB")
-		} 
+		}
 	}
 	system.Info("Detected", len(runningProcesses), "running processes")
-	return runningProcesses, nil 
+	return runningProcesses, nil
 }
 
 // GetRunningApplications returns list of all running GUI applications
 func (pd *ProcessDetector) GetRunningApplications() ([]types.ApplicationInfo, error) {
-    // Use AppleScript to get running applications
-    script := `
+	// Use AppleScript to get running applications
+	script := `
         tell application "System Events"
             set appList to name of every application process whose background only is false
             return appList
         end tell
     `
-    
-    cmd := exec.Command("osascript", "-e", script)
+
+	cmd := exec.Command("osascript", "-e", script)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf(" Failed to get applications: %w", err)
@@ -91,7 +88,7 @@ func (pd *ProcessDetector) getProcessInfo(app config.AppConfig) (types.ProcessIn
 		IsRunning:   false,
 	}
 
-	// Use macOS 'ps' command to find process 
+	// Use macOS 'ps' command to find process
 	cmd := exec.Command("ps", "axo", "pid,comm,rss", "-c")
 	output, err := cmd.Output()
 	if err != nil {
@@ -120,9 +117,9 @@ func (pd *ProcessDetector) getProcessInfo(app config.AppConfig) (types.ProcessIn
 			}
 			memoryMB := rssKB / 1024
 
-			ProcessInfo.PID = pid 
-			ProcessInfo.MemoryMB = memoryMB 
-			ProcessInfo.IsRunning = true 
+			ProcessInfo.PID = pid
+			ProcessInfo.MemoryMB = memoryMB
+			ProcessInfo.IsRunning = true
 
 			// get window state (simplified for now)
 			windowState, err := pd.getWindowState(pid)
@@ -130,13 +127,13 @@ func (pd *ProcessDetector) getProcessInfo(app config.AppConfig) (types.ProcessIn
 				system.Debug("Could not get window state for", app.Name, ":", err)
 				windowState = "normal" // default
 			}
-			ProcessInfo.WindowState = windowState 
+			ProcessInfo.WindowState = windowState
 
 			break
 		}
 	}
 
-	return ProcessInfo, nil 
+	return ProcessInfo, nil
 }
 
 // getWindowState determines if the application window is minimized, maximized, or normal
@@ -173,6 +170,7 @@ func (pd *ProcessDetector) getWindowState(pid int) (string, error) {
 
 	return "normal", nil
 }
+
 // getApplicationInfo gets detailed info for an application
 func (pd *ProcessDetector) getApplicationInfo(appName string) (types.ApplicationInfo, error) {
 	var info types.ApplicationInfo
@@ -189,10 +187,10 @@ func (pd *ProcessDetector) getApplicationInfo(appName string) (types.Application
 	cmd := exec.Command("osascript", "-e", script)
 	output, err := cmd.Output()
 	if err != nil {
-		return info, err 
+		return info, err
 	}
 
-	info.Name = appName	
+	info.Name = appName
 	info.BundleID = strings.TrimSpace(string(output))
 	info.ExecutablePath = fmt.Sprintf("/Applications/%s.app", appName)
 
@@ -233,7 +231,7 @@ func (pd *ProcessDetector) getWindowInfo(appName string) ([]types.WindowInfo, er
 
 	// Example simple parsing: Split by app-specific delimiters (e.g., assume output like "window1:{x,y},size{w,h}; ...")
 	// For now, return empty if not parsable-expand as needed
-	if !strings.Contains(outputStr, "no windows") {  // Basic check like getWindowState
+	if !strings.Contains(outputStr, "no windows") { // Basic check like getWindowState
 		// Placeholder: Add real split/logic here, e.g., strings.Split(outputStr, ";")
 		// windows = append(windows, types.WindowInfo{Title: "Example", ...})  // Stub for testing
 	}
@@ -243,23 +241,22 @@ func (pd *ProcessDetector) getWindowInfo(appName string) ([]types.WindowInfo, er
 
 // isSystemApp checks if app should be excluded
 func isSystemApp(appName string) bool {
-    systemApps := []string{
-        "Finder",
-        "Dock",
-        "SystemUIServer",
-        "loginwindow",
-        "NotificationCenter",
-    }
-    
-    for _, sys := range systemApps {
-        if appName == sys {
-            return true
-        }
-    }
-    
-    return false
-}
+	systemApps := []string{
+		"Finder",
+		"Dock",
+		"SystemUIServer",
+		"loginwindow",
+		"NotificationCenter",
+	}
 
+	for _, sys := range systemApps {
+		if appName == sys {
+			return true
+		}
+	}
+
+	return false
+}
 
 func SortByMemoryUsage(processes []types.ProcessInfo) []types.ProcessInfo {
 	// Simple bubble sort for demonstration purposes. (one could use sort.Slice for better performance)
@@ -275,4 +272,3 @@ func SortByMemoryUsage(processes []types.ProcessInfo) []types.ProcessInfo {
 	}
 	return sorted
 }
-
