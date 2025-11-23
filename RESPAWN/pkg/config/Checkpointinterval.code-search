@@ -1,0 +1,63 @@
+# Query: Checkpointinterval
+# ContextLines: 1
+
+15 results - 5 files
+
+cmd/respawn/main.go:
+  449      system.Info("RESPAWN is now running...")
+  450:     system.Info("Next checkpoint in:", config.GlobalConfig.CheckpointInterval)
+  451  
+
+  677          if isRunning {
+  678:             nextCheckpoint := latest.Timestamp.Add(config.GlobalConfig.CheckpointInterval)
+  679              timeUntil := time.Until(nextCheckpoint)
+
+  690      fmt.Printf("\nConfiguration:\n")
+  691:     fmt.Printf("  Checkpoint interval: %v\n", config.GlobalConfig.CheckpointInterval)
+  692      fmt.Printf("  Data retention: %d days\n", config.GlobalConfig.DataRetentionDays)
+
+internal/system/monitor.go:
+  266      // This method gets optimal interval based on learned patterns
+  267:     optimalInterval := sm.getOptimalCheckpointInterval()
+  268  
+
+  287  
+  288: // This method called getOptimalCheckpointInterval calculates optimal checkpoint interval based on learned pattern
+  289: func (sm *SystemMonitor) getOptimalCheckpointInterval() time.Duration {
+  290:     baseInterval := config.GlobalConfig.CheckpointInterval
+  291  
+
+pkg/config/config.go:
+   23  	// checkpoint settings
+   24: 	CheckpointInterval time.Duration	`json:"checkpoint_interval"`
+   25  	DataRetentionDays  int 		`json:"data_rentention_days"`
+
+   57  
+   58: 		CheckpointInterval: 15 * time.Minute, // 15 minutes 
+   59  		DataRetentionDays: 7, // 7 days
+
+  127      // Validate checkpoint interval
+  128:     if c.CheckpointInterval <= 0 {
+  129          return fmt.Errorf("checkpoint_interval must be greater than 0")
+
+pkg/config/config.go.backup:
+  23  	// checkpoint settings
+  24: 	CheckpointInterval time.Duration	`json:"checkpoint_interval"`
+  25  	DataRententionDays int 		`json:"data_rentention_days"`
+
+  57  
+  58: 		CheckpointInterval: 15 * time.Minute, // 15 minutes
+  59  		DataRententionDays: 7, // 7 days
+
+pkg/config/config.go.save:
+   23  	// checkpoint settings
+   24: 	CheckpointInterval time.Duration	`json:"checkpoint_interval"`
+   25  	DataRetentionDays time.Duration 		`json:"data_rentention_days" yaml:"dataRententionDays"`
+
+   57  
+   58: 		CheckpointInterval: 15 * time.Minute, // 15 minutes
+   59  		DataRetentionDays: 7, // 7 days
+
+  127      // Validate checkpoint interval
+  128:     if c.CheckpointInterval <= 0 {
+  129          return fmt.Errorf("checkpoint_interval must be greater than 0")

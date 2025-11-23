@@ -17,7 +17,7 @@ type AppConfig struct {
 }
 
 type Config struct {
-	// Application Moitoring
+	// Application Monitoring 
 	Applications []AppConfig `json:"applications"`
 
 	// checkpoint settings
@@ -55,7 +55,7 @@ func DefaultConfig() *Config {
 
 		},
 
-		CheckpointInterval: time.Hour, // 1 hour
+		CheckpointInterval: 15 * time.Minute, // 15 minutes 
 		DataRetentionDays: 7, // 7 days
 		AutoRestore: true,
 		MaxRetryAttempts: 3,

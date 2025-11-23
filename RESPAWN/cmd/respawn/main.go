@@ -874,4 +874,3 @@ func boolToStatus(enabled bool) string {
     }
     return "❌ Disabled"
 }
-
