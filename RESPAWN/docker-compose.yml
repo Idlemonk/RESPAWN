@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  respawn:
+    container_name: respawn_service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: respawn-app:latest
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
