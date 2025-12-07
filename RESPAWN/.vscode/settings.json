@@ -1,3 +1,9 @@
 {
-    "terminal.integrated.gpuAcceleration": "off"
+    "terminal.integrated.gpuAcceleration": "off",
+    "python.analysis.extraPaths": [
+        "/Users/NINSCO/.vscode/extensions/continue.continue-0.0.412-darwin-x64"
+    ],
+    "python.autoComplete.extraPaths": [
+        "/Users/NINSCO/.vscode/extensions/continue.continue-0.0.412-darwin-x64"
+    ]
 }

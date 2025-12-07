@@ -42,6 +42,12 @@ type ProcessInfo struct {
 	IsRunning   bool   `json:"is_running"`
 }
 
+// New embedding: Extend ProcessInfo with WindowInfo slice
+type ExtendedProcessInfo struct {
+    Windows []WindowInfo      // Augmented GUI window slice
+}
+
+
 // LaunchResult represents the result of launching an application
 type LaunchResult struct {
 	AppName    string    `json:"app_name"`
